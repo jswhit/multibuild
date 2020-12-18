@@ -4,6 +4,7 @@
 MULTIBUILD_DIR=$(dirname "${BASH_SOURCE[0]}")
 source $MULTIBUILD_DIR/_gfortran_utils.sh
 source $MULTIBUILD_DIR/configure_build.sh
+source $MULTIBUILD_DIR/common_utils.sh
 
 GF_LIB_URL="https://3f23b170c54c2533c070-1c8a9b3114517dc5fe17b7c3f8c63a43.ssl.cf2.rackcdn.com"
 # For OpenBLAS
@@ -25,14 +26,15 @@ LIBWEBP_VERSION="${LIBWEBP_VERSION:-0.5.0}"
 XZ_VERSION="${XZ_VERSION:-5.2.2}"
 LIBYAML_VERSION="${LIBYAML_VERSION:-0.2.2}"
 SZIP_VERSION="${SZIP_VERSION:-2.1.1}"
-HDF5_VERSION="${HDF5_VERSION:-1.10.5}"
+HDF5_VERSION="${HDF5_VERSION:-1.12.0}"
 LIBAEC_VERSION="${LIBAEC_VERSION:-1.0.4}"
 LZO_VERSION=${LZO_VERSION:-2.10}
 LZF_VERSION="${LZF_VERSION:-3.6}"
 BLOSC_VERSION=${BLOSC_VERSION:-1.10.2}
 SNAPPY_VERSION="${SNAPPY_VERSION:-1.1.3}"
 CURL_VERSION=${CURL_VERSION:-7.49.1}
-NETCDF_VERSION=${NETCDF_VERSION:-4.4.1.1}
+NETCDF_VERSION=${NETCDF_VERSION:-4.7.4}
+PERL_VERSION=${PERL_VERSION:-5.10.0}
 SWIG_VERSION=${SWIG_VERSION:-4.0.1}
 PCRE_VERSION=${PCRE_VERSION:-8.38}
 SUITESPARSE_VERSION=${SUITESPARSE_VERSION:-4.5.6}
@@ -328,6 +330,17 @@ function build_curl {
         flags="$flags --with-darwinssl"
     else  # manylinux
         flags="$flags --with-ssl"
+	# Install new Perl because OpenSSL configure scripts require > 5.10.0.
+	perl_version=`perl -e 'print $^V' | cut -f1 -d"v"`
+	echo "Perl version $perl_version"
+	[ $(lex_ver $perll_version) -lt $(lex_ver "5.10.0") ] then
+	   curl -L https://install.perlbrew.pl | bash
+	   export PERLBREW_ROOT=/root/perl5/perlbrew
+	   source ${PERLBREW_ROOT}/etc/bashrc
+	   perlbrew install perl-${PERL_VERSION}
+	   perlbrew use perl-${PERL_VERSION}
+	   echo "New Perl version `perl -v`"
+        fi
         build_openssl
     fi
     fetch_unpack https://curl.haxx.se/download/curl-${CURL_VERSION}.tar.gz
@@ -370,6 +383,9 @@ function build_netcdf {
     build_hdf5
     build_curl
     fetch_unpack https://github.com/Unidata/netcdf-c/archive/v${NETCDF_VERSION}.tar.gz
+    if [ -z "$IS_OSX" ] && [ $MB_ML_VER -eq 1 ]; then
+       export CFLAGS="-std=gnu99 -Wl,-strip-all"
+    fi
     (cd netcdf-c-${NETCDF_VERSION} \
         && ./configure --prefix=$BUILD_PREFIX --enable-dap \
         && make -j4 \
